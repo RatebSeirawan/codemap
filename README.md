@@ -26,6 +26,68 @@ a map of its code:
   token estimates, where recent commits concentrate) and proposes a strategy,
   opening with a 1–2 unit pilot. You decide.
 
+## Philosophy
+
+### Vector RAG over a codebase is bullshit
+
+Embeddings answer one question: *what looks like this?* An agent working in
+your code is asking a different one: *where is it?* Those are not the same
+question, and every RAG-on-code setup I have seen pretends they are.
+
+Code is not prose. It has names, and names are exact. `issueInvoice` is not
+"semantically close" to `voidInvoice`. It is a different function with a
+different contract, and the one that sits nearest in a vector space is the
+one you did not ask for. Chunk a file into 512-token slices and you cut
+functions in half, separate a route from its handler, and lose the file it
+came from. Then you hand the agent the five slices that *felt* closest and
+call it context.
+
+The worst part is that it never fails out loud. A vector store always
+returns something. Ask it for a thing that does not exist and you get the
+nearest thing that does, ranked with the same confidence as a true hit. The
+agent cannot tell "found" from "found something similar", so it builds on
+the near miss. You find out three files later, in a diff that compiles and is
+wrong. And when the code changes, the embeddings do not. Nothing tells you
+they went stale.
+
+This kit takes the other road, on purpose:
+
+- **Exact over similar.** Names are matched as names. Docs are searched as
+  text, section by section, ranked by how rare the term is, not by vibes.
+- **A map, not a pile of chunks.** The code index is a tree: lane → group →
+  unit → entry, written by an agent that read the whole unit. You navigate it
+  the way you navigate a book's table of contents.
+- **Every hit is a pointer, never the answer.** It tells you *where to read*,
+  and the source stays the truth. You can always check it.
+- **"Nothing" means nothing.** No result exits 2. A miss is reported as a
+  miss, never dressed up as the closest neighbour.
+- **Staleness is visible.** An edit flags its unit the moment it lands, and a
+  stale entry says so on every lookup until it is reindexed.
+
+### Speed is not the metric. Certainty is.
+
+Everyone optimises retrieval for latency. Milliseconds. It is the wrong
+number. An agent that gets the wrong answer in 50ms does not save you
+anything; it spends the next hour writing confident code on top of it, and you
+spend the hour after that finding out why.
+
+A wrong pointer costs more than any wait. So:
+
+- Indexing is **slow and deliberate**. One agent per unit, reading the whole
+  unit, with a hard scope and a schema, checked by a validator before it
+  counts. It runs when you ask, never in the middle of your flow.
+- The parts that run on every edit are **cheap because they are dumb**. Shell
+  and git, no model, nothing to get wrong.
+- Routes are **pre-extracted from the real files**, never inferred. A guessed
+  route looks right and 404s. That is the exact failure this exists to kill.
+- "**No drift**" is a valid answer. An indexer is never pushed to invent a
+  change to justify its run.
+
+I would rather an agent wait a second and land on the right file than answer
+instantly and land next to it. Fast and wrong is just wrong, sooner.
+
+— Rateb
+
 ## Install
 
 Requirements: git, and [Bun](https://bun.sh) ≥ 1.2.21 to run the tooling (your
