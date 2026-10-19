@@ -32,8 +32,8 @@ Requirements: git, and [Bun](https://bun.sh) ≥ 1.2.21 to run the tooling (your
 project can be in any language; nothing is added to its package manager).
 
 ```bash
-unzip codemap-setup.zip -d ~/.claude/skills/      # from the zip
-# or: git clone <this repo> ~/.claude/skills/codemap-setup
+git clone https://github.com/RatebSeirawan/codemap ~/.claude/skills/codemap-setup
+# or, from a zip: unzip codemap-setup.zip -d ~/.claude/skills/
 ```
 
 Either way you end up with `~/.claude/skills/codemap-setup/SKILL.md`.
