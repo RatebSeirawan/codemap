@@ -28,63 +28,63 @@ a map of its code:
 
 ## Philosophy
 
-### Vector RAG over a codebase is bullshit
+### Why not vector search?
 
-Embeddings answer one question: *what looks like this?* An agent working in
-your code is asking a different one: *where is it?* Those are not the same
-question, and every RAG-on-code setup I have seen pretends they are.
+Frankly, I think vector RAG over a codebase is bullshit, and I say that as
+someone who tried to make it work.
 
-Code is not prose. It has names, and names are exact. `issueInvoice` is not
-"semantically close" to `voidInvoice`. It is a different function with a
-different contract, and the one that sits nearest in a vector space is the
-one you did not ask for. Chunk a file into 512-token slices and you cut
-functions in half, separate a route from its handler, and lose the file it
-came from. Then you hand the agent the five slices that *felt* closest and
-call it context.
+Embeddings are good at telling you what *looks like* something. But when an
+agent is working in your code, that's not what it's asking. It's asking where
+something *is*: which function, which file, which route. Those are different
+questions, and most RAG-on-code setups quietly pretend they're the same one.
 
-The worst part is that it never fails out loud. A vector store always
-returns something. Ask it for a thing that does not exist and you get the
-nearest thing that does, ranked with the same confidence as a true hit. The
-agent cannot tell "found" from "found something similar", so it builds on
-the near miss. You find out three files later, in a diff that compiles and is
-wrong. And when the code changes, the embeddings do not. Nothing tells you
-they went stale.
+Code isn't prose. It has names, and names are exact. `issueInvoice` isn't
+"similar" to `voidInvoice`; it's a different function with a different
+contract, and the one that happens to sit closest in a vector space is often
+exactly the one you didn't want. On top of that, chunking a file into
+fixed-size slices cuts functions in half and separates a route from the
+handler that serves it, and then the agent gets handed the few slices that
+*felt* closest and is told that's its context.
 
-This kit takes the other road, on purpose:
+What bothers me most is that it never fails honestly. A vector store always
+returns something. Ask it for a thing that doesn't exist and you'll get the
+nearest thing that does, with the same confidence as a real hit. The agent
+can't tell "found it" from "found something like it", so it builds on the
+near miss, and you find out three files later in a diff that compiles and is
+wrong. And when the code changes, the embeddings don't, and nothing tells you.
 
-- **Exact over similar.** Names are matched as names. Docs are searched as
-  text, section by section, ranked by how rare the term is, not by vibes.
-- **A map, not a pile of chunks.** The code index is a tree: lane → group →
-  unit → entry, written by an agent that read the whole unit. You navigate it
-  the way you navigate a book's table of contents.
-- **Every hit is a pointer, never the answer.** It tells you *where to read*,
-  and the source stays the truth. You can always check it.
-- **"Nothing" means nothing.** No result exits 2. A miss is reported as a
-  miss, never dressed up as the closest neighbour.
-- **Staleness is visible.** An edit flags its unit the moment it lands, and a
-  stale entry says so on every lookup until it is reindexed.
+So this kit goes the other way, on purpose. Names are matched as names, and
+docs are searched as plain text, section by section, ranked by how rare a
+term is. The code index is a tree (lane, group, unit, entry), written by an
+agent that actually read the whole unit, so you navigate it like a table of
+contents instead of fishing in a pile of chunks. Every hit is a pointer to
+where you should read, never the answer itself, so the source stays the truth
+and you can always check it. When there's nothing, it says nothing (exit code
+2) instead of offering a lookalike. And when code changes, its unit is flagged
+straight away and every lookup tells you that entry is stale until it's
+reindexed.
 
-### Speed is not the metric. Certainty is.
+### Why I don't care about speed
 
-Everyone optimises retrieval for latency. Milliseconds. It is the wrong
-number. An agent that gets the wrong answer in 50ms does not save you
-anything; it spends the next hour writing confident code on top of it, and you
-spend the hour after that finding out why.
+Everyone seems to optimise retrieval for speed, and honestly I think it's the
+wrong thing to measure. An agent that gets a wrong answer quickly hasn't saved
+you anything. It'll spend the next hour writing perfectly confident code on
+top of that answer, and you'll spend the hour after that working out why it's
+wrong. A wrong pointer costs far more than any wait ever will.
 
-A wrong pointer costs more than any wait. So:
+That's why indexing here is slow and deliberate. One agent per unit reads the
+whole unit, works inside a strict scope and schema, and a validator checks its
+output before it counts. It only runs when you ask for it, never in the middle
+of your work. The bits that run on every edit are cheap precisely because
+they're dumb: plain shell and git, no model, so there's nothing in them to get
+wrong. Routes are taken from the actual route files, never guessed, because a
+guessed route looks completely right right up until it 404s. And an indexer
+is allowed to come back and say "nothing changed"; it's never pushed into
+inventing an edit to justify having run.
 
-- Indexing is **slow and deliberate**. One agent per unit, reading the whole
-  unit, with a hard scope and a schema, checked by a validator before it
-  counts. It runs when you ask, never in the middle of your flow.
-- The parts that run on every edit are **cheap because they are dumb**. Shell
-  and git, no model, nothing to get wrong.
-- Routes are **pre-extracted from the real files**, never inferred. A guessed
-  route looks right and 404s. That is the exact failure this exists to kill.
-- "**No drift**" is a valid answer. An indexer is never pushed to invent a
-  change to justify its run.
-
-I would rather an agent wait a second and land on the right file than answer
-instantly and land next to it. Fast and wrong is just wrong, sooner.
+I'd much rather an agent take a moment and land on the right file than answer
+instantly and land next to it. Fast and wrong is still wrong, it just gets
+there sooner.
 
 — Rateb
 
